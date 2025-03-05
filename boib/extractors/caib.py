@@ -1,11 +1,11 @@
-from datetime import date
+from datetime import date as datetype
 import re
 
 from bs4 import BeautifulSoup
 
 from boib.extractors import ArticleExtractor, BulletinExtractor, SectionExtractor
 from boib.factories import BulletinTypeFactory, SectionTypeFactory
-from boib.models import Article, Bulletin, Section, SectionType
+from boib.models import Article, Bulletin, Date, Section, SectionType
 from boib.utils import get_soup, month_to_number, url_is_absolute
 
 
@@ -18,61 +18,72 @@ class CAIBBulletinExtractor(CAIBBaseExtractor, BulletinExtractor):
 
     def __init__(self,  section_extractor: SectionExtractor = None):
             self.__section_extractor = section_extractor or CAIBSectionExtractor()
-
-    def extract_year(self, year: int) -> list[Bulletin]:
-        yearly_calendar_url = f'{self.BASE_URL}/calendariAnual.do?lang=ca&p_any={year}'
-        soup = get_soup(yearly_calendar_url)
-
-        base_date = date(year, 1, 1)
-
-        bulletins = []
-    
-        table_containers = soup.find_all('div', {'class': 'calendario_anual_mes'})
-        for table_container in table_containers:
-            month_bulletins = self.__extract_month_bulletins(table_container, base_date)
-            bulletins.extend(month_bulletins)
         
-        return bulletins
-    
-    def extract_year_and_month(self, year, month):
-        yearly_calendar_url = f'{self.BASE_URL}/calendariAnual.do?lang=ca&p_any={year}'
+    def extract(self, date: Date) -> list[Bulletin]:
+        yearly_calendar_url = f'{self.BASE_URL}/calendariAnual.do?lang=ca&p_any={date.year}'
         soup = get_soup(yearly_calendar_url)
 
-        base_date = date(year, month, 1)
-    
-        table_container = soup.find_all('div', {'class': 'calendario_anual_mes'})[month - 1]
+        table_containers = soup.find_all('div', {'class': 'calendario_anual_mes'})
 
-        return self.__extract_month_bulletins(table_container, base_date)
+        base_date = datetype(date.year, 1, 1)
+        if date.month is None:
+            bulletins = []
+            for table_container in table_containers:
+                month_bulletins = self.__extract_month_bulletins(table_container, base_date)
+                bulletins.extend(month_bulletins) 
+            
+            return bulletins
+        
+
+        base_date = base_date.replace(month=date.month)
+        month_table = table_containers[date.month - 1]
+
+        if date.day is None:
+            return self.__extract_month_bulletins(month_table, base_date)
+
+        base_date = base_date.replace(day=date.day)
+        day_anchors = month_table.find_all('a', text=re.compile(f'^{date.day}(\\*E)?$'))
+        
+
+        return [
+            self.__extract_bulletin(day_anchor, base_date) for day_anchor in day_anchors
+        ]
     
-    def __extract_month_bulletins(self, table_container, base_date: date) -> list[Bulletin]:
+    def __extract_month_bulletins(self, table_container, base_date: datetype) -> list[Bulletin]:
         bulletins = []
         
         month_str = table_container.find('h3').text
         month = month_to_number(month_str)
+        monthly_date = base_date.replace(month=month)
 
         bulletin_divs = table_container.find_all('div', {'class': 'boib'})
         for bulletin_div in bulletin_divs:
             anchors = bulletin_div.find_all('a')
             for anchor in anchors:
-                bulletin_type = BulletinTypeFactory.from_anchor_class(anchor['class'])
-                day = re.match(r'\d+', anchor.text).group(0)
-
-                bulletin_date = base_date.replace(month=month, day=int(day))
-
-                bulletin = Bulletin(
-                    type=bulletin_type, 
-                    date=bulletin_date, 
-                    url=f'{self.BASE_DOMAIN}{anchor['href']}', 
-                    sections=[]
+                
+                bulletins.append(
+                    self.__extract_bulletin(anchor, monthly_date)
                 )
-
-                bulletins.append(bulletin)
-
-        for bulletin in bulletins:
-            bulletin.sections = self.__section_extractor.extract(bulletin)
 
         return bulletins
     
+    def __extract_bulletin(self, anchor_element, base_date):
+        bulletin_type = BulletinTypeFactory.from_anchor_class(anchor_element['class'])
+        day = re.match(r'\d+', anchor_element.text).group(0)
+
+        bulletin_date = base_date.replace(day=int(day))
+
+        bulletin = Bulletin(
+            type=bulletin_type, 
+            date=bulletin_date, 
+            url=f'{self.BASE_DOMAIN}{anchor_element['href']}', 
+            sections=[]
+        )
+
+        bulletin.sections = self.__section_extractor.extract(bulletin)
+
+        return bulletin
+
 
 class CAIBSectionExtractor(CAIBBaseExtractor, SectionExtractor):
 

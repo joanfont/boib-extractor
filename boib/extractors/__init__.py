@@ -1,16 +1,13 @@
+
 from abc import ABC, abstractmethod
 
-from boib.models import Article, Bulletin, Section
+from boib.models import Article, Bulletin, Date, Section
 
 
 class BulletinExtractor(ABC):
 
     @abstractmethod
-    def extract_year(self, year: int) -> list[Bulletin]:
-        pass
-
-    @abstractmethod
-    def extract_year_and_month(self, year: int, month: int) -> list[Bulletin]:
+    def extract(self, date: Date) -> list[Bulletin]:
         pass
 
 
