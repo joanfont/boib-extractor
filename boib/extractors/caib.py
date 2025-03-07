@@ -5,12 +5,12 @@ from bs4 import BeautifulSoup
 
 from boib.extractors import ArticleExtractor, BulletinExtractor, SectionExtractor
 from boib.factories import BulletinTypeFactory, SectionTypeFactory
-from boib.models import Article, Bulletin, Date, Section, SectionType
+from boib.models import Article, Bulletin, Date, Section, SectionType, URLType
 from boib.utils import get_soup, month_to_number, url_is_absolute
 
 
 class CAIBBaseExtractor:
-    BASE_DOMAIN = 'https://www.caib.es'
+    BASE_DOMAIN = 'https://intranet.caib.es'
     BASE_URL = f'{BASE_DOMAIN}/eboibfront'
 
 
@@ -19,9 +19,9 @@ class CAIBBulletinExtractor(CAIBBaseExtractor, BulletinExtractor):
     def __init__(self,  section_extractor: SectionExtractor = None):
             self.__section_extractor = section_extractor or CAIBSectionExtractor()
         
-    def extract(self, date: Date) -> list[Bulletin]:
-        yearly_calendar_url = f'{self.BASE_URL}/calendariAnual.do?lang=ca&p_any={date.year}'
-        soup = get_soup(yearly_calendar_url)
+    async def extract(self, date: Date) -> list[Bulletin]:
+        yearly_calendar_url = f'{self.BASE_URL}/ca/{date.year}'
+        soup = await get_soup(yearly_calendar_url)
 
         table_containers = soup.find_all('div', {'class': 'calendario_anual_mes'})
 
@@ -29,7 +29,7 @@ class CAIBBulletinExtractor(CAIBBaseExtractor, BulletinExtractor):
         if date.month is None:
             bulletins = []
             for table_container in table_containers:
-                month_bulletins = self.__extract_month_bulletins(table_container, base_date)
+                month_bulletins = await self.__extract_month_bulletins(table_container, base_date)
                 bulletins.extend(month_bulletins) 
             
             return bulletins
@@ -39,17 +39,17 @@ class CAIBBulletinExtractor(CAIBBaseExtractor, BulletinExtractor):
         month_table = table_containers[date.month - 1]
 
         if date.day is None:
-            return self.__extract_month_bulletins(month_table, base_date)
+            return await self.__extract_month_bulletins(month_table, base_date)
 
         base_date = base_date.replace(day=date.day)
         day_anchors = month_table.find_all('a', text=re.compile(f'^{date.day}(\\*E)?$'))
         
 
         return [
-            self.__extract_bulletin(day_anchor, base_date) for day_anchor in day_anchors
+            await self.__extract_bulletin(day_anchor, base_date) for day_anchor in day_anchors
         ]
     
-    def __extract_month_bulletins(self, table_container, base_date: datetype) -> list[Bulletin]:
+    async def __extract_month_bulletins(self, table_container, base_date: datetype) -> list[Bulletin]:
         bulletins = []
         
         month_str = table_container.find('h3').text
@@ -62,12 +62,12 @@ class CAIBBulletinExtractor(CAIBBaseExtractor, BulletinExtractor):
             for anchor in anchors:
                 
                 bulletins.append(
-                    self.__extract_bulletin(anchor, monthly_date)
+                    await self.__extract_bulletin(anchor, monthly_date)
                 )
 
         return bulletins
     
-    def __extract_bulletin(self, anchor_element, base_date):
+    async def __extract_bulletin(self, anchor_element, base_date):
         bulletin_type = BulletinTypeFactory.from_anchor_class(anchor_element['class'])
         day = re.match(r'\d+', anchor_element.text).group(0)
 
@@ -80,7 +80,7 @@ class CAIBBulletinExtractor(CAIBBaseExtractor, BulletinExtractor):
             sections=[]
         )
 
-        bulletin.sections = self.__section_extractor.extract(bulletin)
+        bulletin.sections = await self.__section_extractor.extract(bulletin)
 
         return bulletin
 
@@ -94,16 +94,16 @@ class CAIBSectionExtractor(CAIBBaseExtractor, SectionExtractor):
         self.__article_extractor = article_extractor or CAIBArticleExtractor()
         self.__legacy_article_extractor = CAIBLegacyArticleExtractor()
 
-    def extract(self, bulletin: Bulletin) -> list[Section]:
-        soup = get_soup(bulletin.url)
+    async def extract(self, bulletin: Bulletin) -> list[Section]:
+        soup = await get_soup(bulletin.url)
 
         sections_list = soup.find('ul', {'class': 'primerosHijos'})
         if sections_list is not None:
-           return self.__build_sections(sections_list)
+           return await self.__build_sections(sections_list)
         elif self.__is_legacy(soup):
-            return self.__build_legacy_sections(bulletin, soup)
+            return await self.__build_legacy_sections(bulletin, soup)
     
-    def __build_sections(self, sections_list) -> list[Section]:
+    async def __build_sections(self, sections_list) -> list[Section]:
       
         section_items = sections_list.find_all('a', {'rel': 'section'})
         sections = []
@@ -116,20 +116,20 @@ class CAIBSectionExtractor(CAIBBaseExtractor, SectionExtractor):
                 articles=[]
             )
 
-            section.articles = self.__article_extractor.extract(section)
+            section.articles = await self.__article_extractor.extract(section)
 
             sections.append(section)
         
         return sections
     
-    def __build_legacy_sections(self, bulletin: Bulletin, soup) -> list[Section]:
+    async def __build_legacy_sections(self, bulletin: Bulletin, soup) -> list[Section]:
         section = Section(
             type=SectionType.LEGACY,
             url=bulletin.url,
             articles=[]
         )
 
-        section.articles = self.__legacy_article_extractor.extract_from_soup(soup)
+        section.articles = await self.__legacy_article_extractor.extract_from_soup(soup)
          
         return [section]
 
@@ -142,15 +142,15 @@ class CAIBArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
     def __init__(self):
         self.__grouped_article_extractor = CAIBGroupedArticleExtractor()
     
-    def extract(self, section: Section) -> list[Article]:
-        soup = get_soup(section.url)
+    async def extract(self, section: Section) -> list[Article]:
+        soup = await get_soup(section.url)
 
         if self.__is_grouped(soup):
-            return self.__grouped_article_extractor.extract_from_soup(soup)
+            return await self.__grouped_article_extractor.extract_from_soup(soup)
         else: 
-            return self.__build_articles(soup)
+            return await self.__build_articles(soup)
     
-    def __build_articles(self, soup) -> list[Article]:
+    async def __build_articles(self, soup) -> list[Article]:
         articles_list = soup.find('ul', {'class': 'llistat'})
         article_items = articles_list.find_all('div', {'class': 'caja'})
 
@@ -158,15 +158,26 @@ class CAIBArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
         for article_item in article_items:
             organization = article_item.find('h3', {'class': 'organisme'}).text
             summary = article_item.find('ul', {'class': 'resolucions'}).find('p').text
-            url_anchor = article_item.find('ul', {'class': 'documents'}).find('a', {'aria-label': 'Exportar a PDF'})
-            url = url_anchor['href']
-            if not url_is_absolute(url):
-                url = f'{self.BASE_DOMAIN}{url}'
+    
+            pdf_url_anchor = article_item.find('ul', {'class': 'documents'}).find('a', {'aria-label': 'Exportar a PDF'})
+            pdf_url = pdf_url_anchor['href']
 
+            if not url_is_absolute(pdf_url):
+                pdf_url = f'{self.BASE_DOMAIN}{pdf_url}'
+
+            html_url_anchor = article_item.find('ul', {'class': 'documents'}).find('a', {'aria-label': 'Exportar a HTML'})
+            html_url = html_url_anchor['href']
+
+            if not url_is_absolute(html_url):
+                html_url = f'{self.BASE_DOMAIN}{html_url}'
+            
             article = Article(
                 organization=organization,
                 summary=summary,
-                url=url,
+                urls={
+                    URLType.PDF: pdf_url,
+                    URLType.HTML: html_url,
+                },
             )
 
             articles.append(article)
@@ -179,10 +190,10 @@ class CAIBArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
 
 class CAIBGroupedArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
     
-    def extract(self, section: Section) -> list[Article]:
+    async def extract(self, section: Section) -> list[Article]:
         raise NotImplementedError('Grouped article extraction from section is not supported yet')
 
-    def extract_from_soup(self, soup: BeautifulSoup) -> list[Article]:
+    async def extract_from_soup(self, soup: BeautifulSoup) -> list[Article]:
         div_container = soup.find('div', {'class': 'grupoPrincipal'})
 
         organization_prefix = div_container.find('h2').text.split(' - ')[1]
@@ -205,7 +216,9 @@ class CAIBGroupedArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
                 article = Article(
                     organization=f'{organization_prefix} {last_organization}',
                     summary=summary,
-                    url=f'{self.BASE_DOMAIN}{url_anchor["href"]}',
+                    urls={
+                        URLType.PDF: f'{self.BASE_DOMAIN}{url_anchor["href"]}',
+                    }
                 )
 
                 articles.append(article)
@@ -215,10 +228,10 @@ class CAIBGroupedArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
 
 class CAIBLegacyArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
     
-    def extract(self, section: Section) -> list[Article]:
+    async def extract(self, section: Section) -> list[Article]:
         raise NotImplementedError('Legacy article extraction from section is not supported yet')
 
-    def extract_from_soup(self, soup: BeautifulSoup) -> list[Article]:
+    async def extract_from_soup(self, soup: BeautifulSoup) -> list[Article]:
         articles_list = soup.find('ul', {'class': 'llistat'})
         article = articles_list.find('div', {'class': 'caja'})
         url_anchor = article.find('a', {'class': 'pdf'})

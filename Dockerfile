@@ -4,7 +4,7 @@ ENV PYTHONPATH=/app:${PYTHONPATH}
 
 WORKDIR /app
 
-RUN pip3 --no-cache-dir install -U pip
+RUN pip3 --no-cache-dir install -U pip 
 
 ADD requirements.txt .
 RUN pip3 --no-cache-dir install -r requirements.txt

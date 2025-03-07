@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
+from typing import Dict
 
 
 @dataclass
@@ -18,6 +19,11 @@ class BulletinType:
     EXTRAORDINARY = 'EXTRAORDINARY'
 
 
+class URLType:
+    PDF = 'PDF'
+    HTML = 'HTML'
+
+
 class SectionType(Enum):
     LEGACY = 'LEGACY'
     
@@ -32,7 +38,7 @@ class SectionType(Enum):
 class Article:
     organization: str | None
     summary: str | None
-    url: str
+    urls: Dict[URLType, str]
 
 
 @dataclass
