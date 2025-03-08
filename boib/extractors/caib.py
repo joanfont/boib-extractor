@@ -260,7 +260,9 @@ class CAIBLegacyArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
             number=None,
             organization=None,
             summary=None,
-            url=f'{self.BASE_DOMAIN}{url_anchor['href']}',
+            urls={
+                URLType.PDF: f'{self.BASE_DOMAIN}{url_anchor['href']}',
+            }
         )
 
         return [article]

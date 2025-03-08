@@ -34,5 +34,5 @@ class HTMLArticleDownloader(ArticleDownloader):
             str(bulletin.date.month),
             str(bulletin.date.day),
             str(bulletin.number),
-            f'{str(article.number) or uuid.uuid4().hex}.txt'
+            f'{article.number or uuid.uuid4()}.txt'
         )

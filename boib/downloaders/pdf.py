@@ -36,5 +36,5 @@ class PDFArticleDownloader(ArticleDownloader):
             str(bulletin.date.month),
             str(bulletin.date.day),
             str(bulletin.number),
-            f'{str(article.number) or uuid.uuid4().hex}.pdf'
+            f'{article.number or uuid.uuid4()}.pdf'
         )
