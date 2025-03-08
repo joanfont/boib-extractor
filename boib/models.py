@@ -36,6 +36,7 @@ class SectionType(Enum):
 
 @dataclass
 class Article:
+    number: int | None
     organization: str | None
     summary: str | None
     urls: Dict[URLType, str]
@@ -50,6 +51,7 @@ class Section:
 
 @dataclass
 class Bulletin:
+    number: int
     type: BulletinType
     date: date
     url: str

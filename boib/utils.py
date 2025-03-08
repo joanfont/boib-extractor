@@ -34,8 +34,14 @@ def month_to_number(month: str):
     return months.index(month) + 1
 
 
+def get_async_client(**options): 
+    client_options = {**__HTTPX_CLIENT_OPTIONS, **options}
+
+    return httpx.AsyncClient(**client_options)
+
+
 async def get_soup(url: str) -> BeautifulSoup:
-    async with httpx.AsyncClient(**__HTTPX_CLIENT_OPTIONS) as client:
+    async with get_async_client() as client:
         response = await client.get(url)
         response.raise_for_status()
 

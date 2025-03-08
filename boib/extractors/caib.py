@@ -73,16 +73,28 @@ class CAIBBulletinExtractor(CAIBBaseExtractor, BulletinExtractor):
 
         bulletin_date = base_date.replace(day=int(day))
 
+        url = f'{self.BASE_DOMAIN}{anchor_element['href']}'
+        number = await self.__get_bulletin_number(url)
+
         bulletin = Bulletin(
+            number=number,
             type=bulletin_type, 
             date=bulletin_date, 
-            url=f'{self.BASE_DOMAIN}{anchor_element['href']}', 
+            url=url,
             sections=[]
         )
 
         bulletin.sections = await self.__section_extractor.extract(bulletin)
 
         return bulletin
+
+    async def __get_bulletin_number(self, url: str) -> int:
+        soup = await get_soup(url)
+        number_container = soup.find('a', {'class': 'fijo'})
+        strong = number_container.find('strong')
+
+        return int(re.findall(r'\d+', strong.text.strip())[0], base=10)
+
 
 
 class CAIBSectionExtractor(CAIBBaseExtractor, SectionExtractor):
@@ -156,6 +168,9 @@ class CAIBArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
 
         articles = []
         for article_item in article_items:
+            registry = article_item.find('p', {'class': 'registre'})
+            registry_number = int(re.findall(r'\d+', registry.text)[0])
+
             organization = article_item.find('h3', {'class': 'organisme'}).text
             summary = article_item.find('ul', {'class': 'resolucions'}).find('p').text
     
@@ -172,6 +187,7 @@ class CAIBArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
                 html_url = f'{self.BASE_DOMAIN}{html_url}'
             
             article = Article(
+                number=registry_number,
                 organization=organization,
                 summary=summary,
                 urls={
@@ -210,10 +226,14 @@ class CAIBGroupedArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
             if section_heading_item is not None:
                 last_organization = section_heading_item.text
             elif article_item is not None:
+                registry = article.find('p', {'class': 'registre'})
+                registry_number = int(re.findall(r'\d+', registry.text)[0])
+
                 summary = article_item.find('p').text
                 url_anchor = article_item.find('a', {'class': 'pdf'})
 
                 article = Article(
+                    number=registry_number,
                     organization=f'{organization_prefix} {last_organization}',
                     summary=summary,
                     urls={
@@ -237,6 +257,7 @@ class CAIBLegacyArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
         url_anchor = article.find('a', {'class': 'pdf'})
 
         article = Article(
+            number=None,
             organization=None,
             summary=None,
             url=f'{self.BASE_DOMAIN}{url_anchor['href']}',
