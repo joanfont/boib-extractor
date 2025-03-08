@@ -7,14 +7,14 @@ from aiofiles import os
 class S3Filesystem(Filesystem): 
      
     def __init__(
-            self,
-            bucket_name: str,
-            aws_access_key_id: str | None = None,
-            aws_secret_access_key: str | None = None,
-            region_name: str | None = None,
-            endpoint_url: str | None = None,
-            prefix: str = '',
-        ):
+        self,
+        bucket_name: str,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
+        region_name: str | None = None,
+        endpoint_url: str | None = None,
+        prefix: str = '',
+    ):
             self.__bucket_name = bucket_name
             self.__aws_access_key_id = aws_access_key_id
             self.__aws_secret_access_key = aws_secret_access_key
