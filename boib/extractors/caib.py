@@ -88,13 +88,15 @@ class CAIBBulletinExtractor(CAIBBaseExtractor, BulletinExtractor):
 
         return bulletin
 
-    async def __get_bulletin_number(self, url: str) -> int:
+    async def __get_bulletin_number(self, url: str) -> int | None:
         soup = await get_soup(url)
         number_container = soup.find('a', {'class': 'fijo'})
         strong = number_container.find('strong')
-
-        return int(re.findall(r'\d+', strong.text.strip())[0], base=10)
-
+        matches = re.findall(r'\d+', strong.text.strip())
+        if not matches:
+            return None
+        
+        return matches[0]
 
 
 class CAIBSectionExtractor(CAIBBaseExtractor, SectionExtractor):
@@ -226,7 +228,7 @@ class CAIBGroupedArticleExtractor(CAIBBaseExtractor, ArticleExtractor):
             if section_heading_item is not None:
                 last_organization = section_heading_item.text
             elif article_item is not None:
-                registry = article.find('p', {'class': 'registre'})
+                registry = article_item.find('p', {'class': 'registre'})
                 registry_number = int(re.findall(r'\d+', registry.text)[0])
 
                 summary = article_item.find('p').text
