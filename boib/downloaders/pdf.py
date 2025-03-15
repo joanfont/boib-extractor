@@ -1,7 +1,9 @@
 import os
 import uuid
 
-from boib.downloaders import ArticleDownloader, URLNotAvailableError
+from httpx import HTTPStatusError
+
+from boib.downloaders import ArticleDownloader, DocumentNotAvailableError, URLNotAvailableError
 from boib.filesystems import Filesystem
 from boib.models import Article, Bulletin, URLType
 from boib.utils import get_async_client
@@ -26,7 +28,11 @@ class PDFArticleDownloader(ArticleDownloader):
 
         async with get_async_client() as client:
             response = await client.get(article_url)
-            response.raise_for_status()
+
+            try:
+                response.raise_for_status()
+            except HTTPStatusError as e:
+                raise DocumentNotAvailableError() from e
 
             return response.content
 
